@@ -1,0 +1,103 @@
+import numpy as np
+from scipy.integrate import solve_ivp
+import matplotlib.pyplot as plt
+import streamlit as st
+
+# Configuração da página do site
+st.set_page_config(
+    page_title="Cosmologia BNR - Simulador do Fator de Escala",
+    page_icon="🌌",
+    layout="wide"
+)
+
+# Título Principal do Site
+st.title("🌌 Simulador do Modelo Cosmológico Discreto: Buracos Negros em Rotação (BNRs)")
+st.markdown("""
+Este aplicativo web interativo implementa a **Equação de Friedmann Modificada** derivada para o modelo cosmológico de BNRs. 
+Explore como os parâmetros de massa, rotação (Kerr) e energia escura ($\Lambda$) alteram a evolução do Universo e removem a singularidade do Big Bang através do *Big Bounce*.
+""")
+
+# --- BARRA LATERAL (CONTROLES DOS PARÂMETROS) ---
+st.sidebar.header("🎛️ Parâmetros do Modelo")
+
+C_val = st.sidebar.slider("Atração da Matéria ($C$)", 1.0, 30.0, 10.0, 0.5)
+Dr_val = st.sidebar.slider("Termo de Rotação / Momento Angular ($D_R$)", 0.0, 10.0, 2.0, 0.1)
+Er_val = st.sidebar.slider("Termo Relativístico de Kerr ($E_R$)", 0.0, 1.0, 0.1, 0.01)
+Lambda_val = st.sidebar.slider("Constante Cosmológica ($\Lambda$)", 0.0, 0.5, 0.05, 0.01)
+K_val = st.sidebar.selectbox("Curvatura Espacial ($K$)", [-1.0, 0.0, 1.0], index=1)
+
+# --- NÚCLEO DE CÁLCULO (RESOLUÇÃO DA EDO) ---
+def edo_cosmos(t, R):
+    if R <= 0: 
+        return 0.0
+    termo = (C_val / R) - (Dr_val / (R**2)) + (Er_val / (R**3)) + (Lambda_val / 3.0) * (R**2) - K_val
+    return np.sqrt(max(0.0, termo))
+
+# Calculando o Raio Mínimo Analítico aproximado para inicialização
+# C*R_min^2 - Dr*R_min + Er = 0
+raizes = np.roots([C_val, -Dr_val, Er_val])
+r_inicial = max([r for r in raizes if r > 0], default=0.1)
+
+# Simulação numérica para o futuro e passado
+t_eval = np.linspace(0.0, 20.0, 300)
+sol_futuro = solve_ivp(edo_cosmos, (0.0, 20.0), [r_inicial], t_eval=t_eval)
+sol_passado = solve_ivp(edo_cosmos, (0.0, 20.0), [r_inicial], t_eval=t_eval)
+
+t_completo = np.concatenate([-sol_passado.t[::-1], sol_futuro.t[1:]])
+R_completo = np.concatenate([sol_passado.y[0][::-1], sol_futuro.y[0][1:]])
+V_completo = np.concatenate([
+    -np.array([edo_cosmos(t, r) for t, r in zip(sol_passado.t[::-1], sol_passado.y[0][::-1])]),
+    np.array([edo_cosmos(t, r) for t, r in zip(sol_futuro.t[1:], sol_futuro.y[0][1:])])
+])
+
+# --- EXIBIÇÃO DOS RESULTADOS NA TELA ---
+col1, col2 = st.columns([2, 1])
+
+with col2:
+    st.subheader("📊 Métricas do Modelo")
+    st.metric(label="Raio Mínimo ($R_{\\text{min}}$ / Bounce)", value=f"{r_inicial:.4f}")
+    st.metric(label="Estado Inicial", value="Regular (Sem Singularidade)")
+    st.markdown("---")
+    st.info("Altere os seletores na barra lateral à esquerda para observar a deformação das curvas em tempo real.")
+
+with col1:
+    st.subheader("📈 Gráfico de Evolução Dinâmica")
+    
+    # Criando os gráficos com Matplotlib
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(8, 6), sharex=True, gridspec_kw={'height_ratios': [3, 1]})
+    
+    # Painel do Raio
+    ax1.plot(t_completo, R_completo, color='#003366', linewidth=2.5, label='$R(t)$ (Fator de Escala)')
+    ax1.axhline(0, color='gray', linestyle='--', linewidth=0.8)
+    ax1.axvline(0, color='gray', linestyle=':', linewidth=0.8)
+    ax1.set_ylabel('Raio $R(t)$', fontweight='bold')
+    ax1.set_title('Evolução do Fator de Escala e Velocidade', fontweight='bold')
+    ax1.grid(True, linestyle=':', alpha=0.6)
+    ax1.legend(loc='upper left')
+    
+    # Painel da Velocidade
+    ax2.plot(t_completo, V_completo, color='#cc0000', linewidth=2, label='$\\dot{R}(t)$ (Velocidade)')
+    ax2.axhline(0, color='black', linestyle='-', linewidth=0.8)
+    ax2.set_xlabel('Tempo Cósmico ($t$)', fontweight='bold')
+    ax2.set_ylabel('Velocidade', fontweight='bold')
+    ax2.grid(True, linestyle=':', alpha=0.6)
+    ax2.legend(loc='upper left')
+    
+    plt.tight_layout()
+    st.pyplot(fig)
+
+# --- SEÇÃO DE FUNDAMENTAÇÃO TEÓRICA NO SITE ---
+st.markdown("---")
+st.subheader("📚 Equação de Friedmann Modificada Implementada")
+st.latex(r"""
+\dot{R}^2 = \frac{C}{R} - \frac{D_R}{R^2} + \frac{E_R}{R^3} + \frac{1}{3} \Lambda R^2 - K
+""")
+st.markdown("""
+* **Termo de Matéria ($C/R$):** Atração gravitacional clássica.
+* **Termo de Rotação ($-D_R/R^2$):** Barreira centrífuga que impede o colapso a zero.
+* **Termo de Kerr ($E_R/R^3$):** Correção de campo forte gravitacional rotacional.
+* **Constante Cosmológica ($\frac{1}{3}\Lambda R^2$):** Responsável pela aceleração tardia do universo.
+""")
+app.py
+requirements.txt
+streamlit
